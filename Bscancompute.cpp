@@ -10,7 +10,7 @@
 
 
 /*
-* opencv binary file reader
+* Compute offline Bscans.
 * has option to save as Matlab readable file.
 *
 
@@ -22,7 +22,7 @@
 *
 *
 * Hari Nandakumar
-* 30 Aug 2019  *
+* 03 Sep 2019  *
 *
 *
 */
