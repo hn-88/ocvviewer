@@ -389,6 +389,11 @@ inline void savematasdata(cv::FileStorage& o, char* f, Mat m)
 }
 #endif
 
+bool fexists(const char *filename) {
+  std::ifstream ifile(filename);
+  return (bool)ifile;
+}
+
 int main(int argc, char *argv[])
 { 
 	
@@ -657,11 +662,53 @@ int main(int argc, char *argv[])
 	
 	while (1)
 	{
+		if (nkeypressed == 1)
+		{
+			strcpy(pathname, withoutnum.c_str());
+			sprintf(filename, "%03d", indexi+1);
+			strcat(pathname, filename);
+			strcat(pathname, ".ocv");
+			// if this file exists, read it, and show it
+			if (fexists(pathname))
+			{
+				indexi++;
+			}
+			else
+			{
+				strcpy(pathname, withoutnum.c_str());
+				sprintf(filename, "%03d", indexi);
+				strcat(pathname, filename);
+				strcat(pathname, ".ocv");
+			}
+			nkeypressed = 0;
+		}
+		
+		if (pkeypressed == 1)
+		{
+			strcpy(pathname, withoutnum.c_str());
+			sprintf(filename, "%03d", indexi-1);
+			strcat(pathname, filename);
+			strcat(pathname, ".ocv");
+			// if this file exists, read it, and show it
+			if (fexists(pathname))
+			{
+				indexi--;
+			}
+			else
+			{
+				strcpy(pathname, withoutnum.c_str());
+				sprintf(filename, "%03d", indexi);
+				strcat(pathname, filename);
+				strcat(pathname, ".ocv");
+			}
+			pkeypressed = 0;
+		}
+		
 		mraw = matread(pathname);
 		 
 		
 		minMaxLoc(mraw, &minVal, &maxVal);
-		cout << endl << "Min-Max = " << minVal << " to " << maxVal << " dB" << endl;
+		cout << indexi << ". Min-Max = " << minVal << " to " << maxVal << " dB" << endl;
 		
 		normalize(mraw, opm, 0.0, 1, NORM_MINMAX);
 		
@@ -677,19 +724,7 @@ int main(int argc, char *argv[])
 			savematasdata(datafile, filename, mraw);
 		}
 		
-		if (nkeypressed == 1)
-		{
-			strcpy(pathname, withoutnum.c_str());
-			sprintf(filename, "%03d", indexi+1);
-			strcat(pathname, filename);
-			strcat(pathname, ".ocv");
-			// if this file exists, read it, and show it
-			//if (exists)
-			{
-				//strcpy(OpenFileName, pathname);
-				indexi++;
-			}
-		}
+		
 	
 
 				key = waitKey(0); // wait indefinitely for keypress
