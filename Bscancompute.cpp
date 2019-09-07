@@ -389,6 +389,82 @@ inline void savematasdata(cv::FileStorage& o, char* f, Mat m)
 }
 #endif
 
+bool fexists(const char *filename) 
+{
+  std::ifstream ifile(filename);
+  return (bool)ifile;
+}
+
+Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int increasefftpointsmultiplier, int numdisplaypoints, Mat diffk, Mat slopes, Mat fractionalk, Mat nearestkindex )
+{
+		// apodize 
+		// data_y = ( (data_y - data_yb) ./ data_yb ).*gausswin
+	
+		data_y = (data_y ) / data_yb;
+
+
+		for (int p = 0; p<(data_y.rows); p++)
+		{
+			//DC removal
+			Scalar meanval = mean(data_y.row(p));
+			data_y.row(p) = data_y.row(p) - meanval(0);		// Only the first value of the scalar is useful for us
+
+															//windowing
+			multiply(data_y.row(p), barthannwin, data_y.row(p));
+		}
+
+		//increasing number of points by zero padding
+		if (increasefftpointsmultiplier > 1)
+			data_y = zeropadrowwise(data_y, increasefftpointsmultiplier);
+
+
+		// interpolate to linear k space
+		for (int p = 0; p<(data_y.rows); p++)
+		{
+			for (int q = 1; q<(data_y.cols); q++)
+			{
+				//find the slope of the data_y at each of the non-linear ks
+				slopes.at<double>(p, q) = data_y.at<double>(p, q) - data_y.at<double>(p, q - 1);
+				// in the .at notation, it is <double>(y,x)
+				//printf("slopes(%d,%d)=%f \n",p,q,slopes.at<double>(p,q));
+			}
+			// initialize the first slope separately
+			slopes.at<double>(p, 0) = slopes.at<double>(p, 1);
+
+
+			for (int q = 1; q<(data_ylin.cols - 1); q++)
+			{
+				//find the value of the data_ylin at each of the klinear points
+				// data_ylin = data_y(nearestkindex) + fractionalk(nearestkindex)*slopes(nearestkindex)
+				//std::cout << "q=" << q << " nearestk=" << nearestkindex.at<int>(0,q) << std::endl;
+				data_ylin.at<double>(p, q) = data_y.at<double>(p, nearestkindex.at<int>(0, q))
+					+ fractionalk.at<double>(nearestkindex.at<int>(0, q))
+					* slopes.at<double>(p, nearestkindex.at<int>(0, q));
+				//printf("data_ylin(%d,%d)=%f \n",p,q,data_ylin.at<double>(p,q));
+			}
+			//data_ylin.at<double>(p, 0) = 0;
+			//data_ylin.at<double>(p, numfftpoints) = 0;
+
+		}
+
+		// InvFFT
+
+		Mat planes[] = { Mat_<float>(data_ylin), Mat::zeros(data_ylin.size(), CV_32F) };
+		Mat complexI, magI;
+		merge(planes, 2, complexI);         // Add to the expanded another plane with zeros
+
+		dft(complexI, complexI, DFT_ROWS | DFT_INVERSE);            // this way the result may fit in the source matrix
+
+																	// compute the magnitude and switch to logarithmic scale
+																	// => log(1 + sqrt(Re(DFT(I))^2 + Im(DFT(I))^2))
+		split(complexI, planes);                   // planes[0] = Re(DFT(I), planes[1] = Im(DFT(I))
+		magnitude(planes[0], planes[1], magI);
+
+		Mat bscantemp = magI.colRange(0, numdisplaypoints);
+		bscantemp.convertTo(bscantemp, CV_64F);
+		return bscantemp;
+}
+
 int main(int argc, char *argv[])
 { 
 	
@@ -398,7 +474,7 @@ int main(int argc, char *argv[])
 	char id[32];
 	//char camtype[16];
 	int found = 0;
-	unsigned int w, h, bpp = 8, channels, cambitdepth = 16;
+	unsigned int w, h, bpp = 16, channels, cambitdepth = 16;
 	unsigned int offsetx = 0, offsety = 0;
 	unsigned int indexi, manualindexi, averages = 1, opw, oph;
 	uint  indextemp;
@@ -408,9 +484,9 @@ int main(int argc, char *argv[])
 
 
 	int camtime = 1, camgain = 1, camspeed = 1, cambinx = 2, cambiny = 2, usbtraffic = 10;
-	int camgamma = 1, binvalue = 1, normfactor = 1, normfactorforsave = 25;
-	int numfftpoints = 1024;
-	int numdisplaypoints = 512;
+	int camgamma = 1, binvalue = 2, normfactor = 1, normfactorforsave = 25;
+	int numfftpoints = 2880;
+	int numdisplaypoints = 360;
 	bool saveframes = 0;
 	bool manualaveraging = 0, saveinterferograms = 0;
 	unsigned int manualaverages = 1;
@@ -422,15 +498,15 @@ int main(int argc, char *argv[])
 	
 	Mat jmask, jmaskt;
 	double lambdamin, lambdamax;
-	lambdamin = 816e-9;
-	lambdamax = 884e-9;
-	int mediann = 5;
-	uint increasefftpointsmultiplier = 1;
+	lambdamin = 840.5e-9;
+	lambdamax = 859.5e-9;
+	int mediann = 0;
+	uint increasefftpointsmultiplier = 4;
 	double bscanthreshold = -30.0;
 	bool rowwisenormalize = 0;
 	bool donotnormalize = 1;
 
-	w = 1280;
+	w = 1440;
 	h = 960;
 
 	int  fps, key;
@@ -452,17 +528,19 @@ int main(int argc, char *argv[])
 	
 	
 	
-	namedWindow("show", 0); // 0 = WINDOW_NORMAL
-	moveWindow("show", 0, 0);
-
-	//namedWindow("Bscan", 0); // 0 = WINDOW_NORMAL
-	//moveWindow("Bscan", 800, 0);
-
-	//namedWindow("Status", 0); // 0 = WINDOW_NORMAL
-	//moveWindow("Status", 0, 500);
+	namedWindow("offline Bscan", 0); // 0 = WINDOW_NORMAL
+	moveWindow("offline Bscan", 900, 500);
 
 	
+	
+	/*Mat bscanmanualsave0[100];
+	Mat bscanmanualsave1[100];
 
+	Mat interferogramsave0[100];
+	Mat interferogramsave1[100];
+	Mat interferogrambsave0[100];
+	Mat interferogrambsave1[100];*/
+	
 	/////////////////////////////////////
 	// init camera, variables, etc
 
@@ -491,26 +569,21 @@ int main(int argc, char *argv[])
 
 	manualaccumcount = 0;
 
-	Mat bscansave0[100];		// allocate buffer to save frames, max 100
-	Mat bscansave1[100];		// one buffer is active while other is saved on skeypressed
+	Mat bscansave[100];		// allocate buffer to save linear bscans, max 100
+	Mat jscansave[100];		// and jscans
 
-	Mat jscansave;		// to save j frames
+	//Mat jscansave;		// to save j frames
 
-	Mat bscanmanualsave0[100];
-	Mat bscanmanualsave1[100];
-
-	Mat interferogramsave0[100];
-	Mat interferogramsave1[100];
-	Mat interferogrambsave0[100];
-	Mat interferogrambsave1[100];
+	
 	Mat bscansublog, positivediff;
 
 	bool zeroisactive = 1;
 
-	int nr, nc;
+	//int nr, nc;
 
 	Mat m, opm, opmvector, bscan, bscanlog, bscandb, bscandisp, bscandispmanual, bscantemp, bscantemp2, bscantemp3, bscantransposed, chan[3];
-	Mat tempmat;
+	Mat tempmat; 
+	Mat rgbchannels[3];
 	Mat bscandispj;
 	Mat mraw;
 	Mat ROIplot = Mat::zeros(cv::Size(600, 300), CV_64F);
@@ -558,7 +631,7 @@ int main(int argc, char *argv[])
 
 	}
 
-	resizeWindow("Bscan", oph, numdisplaypoints);		// (width,height)
+	//resizeWindow("Bscan", oph, numdisplaypoints);		// (width,height)
 
 	for (indextemp = 0; indextemp<(increasefftpointsmultiplier*data_y.cols); indextemp++)
 	{
@@ -622,122 +695,217 @@ int main(int argc, char *argv[])
 		//printf("f=%d, fractionalk=%f\n",f, fractionalk.at<double>(0,f));
 	}
 	
-	//strcpy(pathname,"bscan001.ocv");
-	char const * FilterPatterns[2] =  { "*.ocv", "*.*" };
-	char const * OpenFileName = tinyfd_openFileDialog(
-		"Open a .OCV file",
-		"",
-		2,
-		FilterPatterns,
-		NULL,
-		0);
-
-	if (! OpenFileName)
+	averages = atoi(argv[2]);
+	strcpy(pathname, argv[1]);
+	strcat(pathname,"/spectrum.ocv");
+	if ( fexists(pathname) )
+		data_yb = matread(pathname);
+	else
 	{
-		tinyfd_messageBox(
-			"Error",
-			"No file chosen. ",
-			"ok",
-			"error",
-			1);
-		return 1 ;
-	}
+		cout << "No saved spectrum found, offline tool exiting." << endl;
+		return 1;
+	} 
 	
-	string originalfilename, withoutnum, onlynum;
-	originalfilename = OpenFileName;
-	int origfilenamesize = originalfilename.size();
-	withoutnum = originalfilename.substr(0, origfilenamesize-7);
-	// .ocv is the last 4 characters, and we assume there are 3 digits before that.
-	//cout << withoutnum << endl;
-	onlynum = originalfilename.substr(origfilenamesize-7, 3);
-	//cout << onlynum << endl;
-	indexi = stoi(onlynum);
-	//cout << indexi << endl;
-	strcpy(pathname, originalfilename.c_str());
+	indextemp = 0;
+	indexi = 1;
+	averagestoggle = averages;
 	
-	while (1)
+	bscantransposed = Mat::zeros(Size(numdisplaypoints, oph), CV_64F);
+	bscantransposed.copyTo(bscantemp3);
+	bscantransposed.copyTo(bscantemp2);
+	
+	while(1)
 	{
-		mraw = matread(pathname);
-		 
 		
-		minMaxLoc(mraw, &minVal, &maxVal);
-		cout << endl << "Min-Max = " << minVal << " to " << maxVal << " dB" << endl;
-		
-		normalize(mraw, opm, 0.0, 1, NORM_MINMAX);
-		
-		imshow("show", opm);
-		
-		if (skeypressed == 1)
-		{
-			strcpy(pathname, withoutnum.c_str());
-			sprintf(filename, "b%03d", indexi);
-			strcat(pathname, filename);
-			strcat(pathname, ".m");
-			std::ofstream datafile(pathname);
-			savematasdata(datafile, filename, mraw);
-		}
-		
-		if (nkeypressed == 1)
-		{
-			strcpy(pathname, withoutnum.c_str());
-			sprintf(filename, "%03d", indexi+1);
-			strcat(pathname, filename);
-			strcat(pathname, ".ocv");
-			// if this file exists, read it, and show it
-			//if (exists)
+		while (indextemp < averages)
+		{ 
+			
+			strcpy(pathname, argv[1]);
+			sprintf(filename,"/Trig%03d-%03d.png", indexi, indextemp);
+			strcat(pathname,filename);
+			if ( fexists(pathname) )
 			{
-				//strcpy(OpenFileName, pathname);
-				indexi++;
+				opm = imread(pathname);
+				split(opm, rgbchannels);
 			}
-		}
+			else
+			{
+				cout << "A Trig file is missing, offline tool exiting." << endl;
+				return 1;
+			} 
+		
+			
+			/////////////////////////////////////////////////////////
+			// do all Bscan processing here
+			
+			rgbchannels[0].convertTo(data_y, CV_64F);	// initialize data_y
+			
+			bscansave[indextemp] = linearbscan(data_y, data_yb, data_ylin, barthannwin, increasefftpointsmultiplier, numdisplaypoints, diffk,  slopes, fractionalk, nearestkindex );
+			
+			strcpy(pathname, argv[1]);
+			sprintf(filename,"/KTrig%03d-%03d.png", indexi, indextemp);
+			strcat(pathname,filename);
+			if ( fexists(pathname) )
+			{
+				opm = imread(pathname);
+				split(opm, rgbchannels);
+			}
+			else
+			{
+				cout << "A KTrig file is missing, offline tool exiting." << endl;
+				return 1;
+			} 
+			
+			rgbchannels[0].convertTo(data_y, CV_64F);	// initialize data_y
+			/////////////////////////////////////////////////////////
+			// do all Bscan processing here
+			jscansave[indextemp] = linearbscan(data_y, data_yb, data_ylin, barthannwin, increasefftpointsmultiplier, numdisplaypoints, diffk,  slopes, fractionalk, nearestkindex );
+			
+			bscantemp3 = bscansave[indextemp] - jscansave[indextemp];
+			makeonlypositive(bscantemp3, bscantemp2);
+			bscantransposed = bscantransposed + bscantemp2;
+			
+			indextemp++;
+			
+			//accumulate(bscantemp, bscantransposed);
+
+		} // end while (indextemp < averages)
+		
+
+				// this is the final display routine
+					transpose(bscantransposed, bscan);
+					bscan = bscan / averagestoggle;
+					bscan += Scalar::all(0.00001);   	// to prevent log of 0  
+														// 20.0 * log(0.1) / 2.303 = -20 dB, which is sufficient 
+
+					
+					log(bscan, bscanlog);					// switch to logarithmic scale
+															//convert to dB = 20 log10(value), from the natural log above
+					bscandb = 20.0 * bscanlog / 2.303;
+
+					bscandb.row(4).copyTo(bscandb.row(1));	// masking out the DC in the display
+					bscandb.row(4).copyTo(bscandb.row(0));
+
+					//bscandisp=bscandb.rowRange(0, numdisplaypoints);
+					tempmat = bscandb.rowRange(0, numdisplaypoints);
+					tempmat.copyTo(bscandisp);
+					// apply bscanthresholding
+					// MatExpr max(const Mat& a, double s)
+					bscandisp = max(bscandisp, bscanthreshold);
+					if (clampupper)
+					{
+						// if this option is selected, set the left upper pixel to 50 dB
+						// before normalizing
+						bscandisp.at<double>(5, 5) = 50.0;
+					}
+					normalize(bscandisp, bscandisp, 0, 1, NORM_MINMAX);	// normalize the log plot for display
+					bscandisp.convertTo(bscandisp, CV_8UC1, 255.0);
+
+					
+					applyColorMap(bscandisp, cmagI, COLORMAP_JET);
+					//putText(cmagI, "^", Point(ascanat - 10, numdisplaypoints), FONT_HERSHEY_COMPLEX, 1, Scalar(255, 255, 255), 3, 8);
+					//putText(img,"Text",location, fontface, fonstscale,colorbgr,thickness,linetype, bool bottomLeftOrigin=false);
+
+					imshow("offline Bscan", cmagI);
+					
+
+					if (skeypressed == 1)
+
+					{ 
+
+						//indexi++;
+						sprintf(filename, "bscanoffline%03d", indexi);
+						 
+						savematasbin(pathname, dirname, filename, bscandb);
+						savematasimage(pathname, dirname, filename, bscandisp);
+						sprintf(filenamec, "bscanofflinec%03d", indexi);
+						savematasimage(pathname, dirname, filenamec, cmagI);
+
+						sprintf(textbuffer, "bscanoffline%03d saved.", indexi);
+						secrowofstatusimg = Mat::zeros(cv::Size(600, 50), CV_64F);
+						putText(statusimg, textbuffer, Point(0, 80), FONT_HERSHEY_SIMPLEX, 1, Scalar(255, 255, 255), 3, 1);
+						imshow("Status", statusimg);
+
+						
+
+						skeypressed = 0; // if bscanl is necessary, comment this line, do for bscanl also, then make it 0 
+
+						
+
+					}// end if skeypressed
+
+					bscantransposed = Mat::zeros(Size(numdisplaypoints, oph), CV_64F);
+
+					
+
+				//} // end else (if indextemp < averages)
+
+				  
+				
+		/////////////////////////////////////////////////////////
+		
+		//indexi++; 
+		
 	
-
-				key = waitKey(0); // wait indefinitely for keypress
+	
+		key = waitKey(0); // wait indefinitely for keypress
 				
-				switch (key)
-				{
+			switch (key)
+			{
 
-				case 27: //ESC key
-				case 'x':
-				case 'X':
-					doneflag = 1;
-					break;
-
-				
-				case 's':
-				case 'S':
-				case ' ':
-
-					skeypressed = 1;
-					break;
-
-				case 'n':
-				case 'N':
-
-					nkeypressed = 1;
-					break;
-
-				case 'p':
-				case 'P':
-
-					pkeypressed = 1;
-					break;
-
-				
-				default:
-					break;
-
-				}
-				
-				
-				if (doneflag == 1)
-				{
-					break;
-				}
+			case 27: //ESC key
+			case 'x':
+			case 'X':
+				doneflag = 1;
+				break;
 
 			
-		} // while loop end
+			case 's':
+			case 'S':
+			case ' ':
+
+				skeypressed = 1;
+				break;
+
+			case 'n':
+			case 'N':
+				strcpy(pathname, argv[1]);
+				sprintf(filename,"/Trig%03d-%03d.png", indexi+1, 0);
+				strcat(pathname,filename);
+				if ( fexists(pathname) )
+				{
+					indexi++;
+					indextemp = 0;
+				}
+				break;
+
+			case 'p':
+			case 'P':
+				strcpy(pathname, argv[1]);
+				sprintf(filename,"/Trig%03d-%03d.png", indexi-1, 0);
+				strcat(pathname,filename);
+				if ( fexists(pathname) )
+				{
+					indexi++;
+					indextemp = 0;
+				}
+				break;
+
+			
+			default:
+				break;
+
+			}
+			
+			
+			if (doneflag == 1)
+			{
+				break;
+			}
+
 		
+	} // while loop end
+	
 		
 	return 0;
 

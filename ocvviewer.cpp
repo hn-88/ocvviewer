@@ -656,7 +656,10 @@ int main(int argc, char *argv[])
 	//cout << withoutnum << endl;
 	onlynum = originalfilename.substr(origfilenamesize-7, 3);
 	//cout << onlynum << endl;
-	indexi = stoi(onlynum);
+	if(isdigit(onlynum[0]) && isdigit(onlynum[1]) && isdigit(onlynum[2]) )
+		indexi = stoi(onlynum);
+	else
+		indexi = 0;
 	//cout << indexi << endl;
 	strcpy(pathname, originalfilename.c_str());
 	
