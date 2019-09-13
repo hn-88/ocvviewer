@@ -408,6 +408,12 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 		data_y = (data_y ) / data_yb;
 		//debug
 		//cout << "(data_y ) / data_yb done" << endl;
+		//savematasdata
+		std::ofstream datay("datay.m");
+		datay << "datay" << "=";
+		datay << data_y;
+		datay << ";" << std::endl;
+		
 
 
 		for (int p = 0; p<(data_y.rows); p++)
@@ -419,6 +425,11 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 															//windowing
 			multiply(data_y.row(p), barthannwin, data_y.row(p));
 		}
+		// debug
+		std::ofstream dataywin("dataywin.m");
+		dataywin << "dataywin" << "=";
+		dataywin << data_y;
+		dataywin << ";" << std::endl;
 
 		//increasing number of points by zero padding
 		if (increasefftpointsmultiplier > 1)
@@ -453,6 +464,12 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 			//data_ylin.at<double>(p, numfftpoints) = 0;
 
 		}
+		
+		//debug
+		std::ofstream dataylin("dataylin.m");
+		dataylin << "dataylin" << "=";
+		dataylin << data_ylin;
+		dataylin << ";" << std::endl;
 
 		// InvFFT
 
@@ -469,6 +486,11 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 
 		Mat bscantemp = magI.colRange(0, numdisplaypoints);
 		bscantemp.convertTo(bscantemp, CV_64F);
+		//debug
+		std::ofstream bscant("bscant.m");
+		bscant << "bscant" << "=";
+		bscant << bscantemp;
+		bscant << ";" << std::endl;
 		return bscantemp;
 }
 
@@ -723,6 +745,16 @@ int main(int argc, char *argv[])
 	bscantransposed = Mat::zeros(Size(numdisplaypoints, oph), CV_64F);
 	bscantransposed.copyTo(bscantemp3);
 	bscantransposed.copyTo(bscantemp2);
+	
+	for (uint p = 0; p<(opw); p++)
+	{
+		// create modified Bartlett-Hann window
+		// https://in.mathworks.com/help/signal/ref/barthannwin.html
+		float nn = p;
+		float NN = opw - 1;
+		barthannwin.at<double>(0, p) = 0.62 - 0.48*std::abs(nn / NN - 0.5) + 0.38*std::cos(2 * pi*(nn / NN - 0.5));
+
+	}
 	
 	while(1)
 	{
