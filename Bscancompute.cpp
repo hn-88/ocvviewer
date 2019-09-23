@@ -331,21 +331,21 @@ Mat matread(const string& filename)
 
 inline void savematasbin(char* p, char* d, char* f, Mat m)
 {
-	// saves a Mat m by writing to a binary file  f appending .spin, both windows and unix versions
+	// saves a Mat m by writing to a binary file  f appending .ocv, both windows and unix versions
 	// p=pathname, d=dirname, f=filename
 
 #ifdef __unix__
 	strcpy(p, d);
 	strcat(p, "/");
 	strcat(p, f);
-	strcat(p, ".spin");
+	strcat(p, ".ocv");
 	matwrite(p, m);
 #else
 
 	strcpy(p, d);
 	strcat(p, "\\");		// imwrite needs path with \\ separators, not /, on windows
 	strcat(p, f);
-	strcat(p, ".spin");
+	strcat(p, ".ocv");
 	matwrite(p, m);
 #endif	
 
@@ -409,10 +409,10 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 		//debug
 		//cout << "(data_y ) / data_yb done" << endl;
 		//savematasdata
-		std::ofstream datay("datay.m");
-		datay << "datay" << "=";
-		datay << data_y;
-		datay << ";" << std::endl;
+		//~ std::ofstream datay("datay.m");
+		//~ datay << "datay" << "=";
+		//~ datay << data_y;
+		//~ datay << ";" << std::endl;
 		
 
 
@@ -426,10 +426,10 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 			multiply(data_y.row(p), barthannwin, data_y.row(p));
 		}
 		// debug
-		std::ofstream dataywin("dataywin.m");
-		dataywin << "dataywin" << "=";
-		dataywin << data_y;
-		dataywin << ";" << std::endl;
+		//~ std::ofstream dataywin("dataywin.m");
+		//~ dataywin << "dataywin" << "=";
+		//~ dataywin << data_y;
+		//~ dataywin << ";" << std::endl;
 
 		//increasing number of points by zero padding
 		if (increasefftpointsmultiplier > 1)
@@ -466,10 +466,10 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 		}
 		
 		//debug
-		std::ofstream dataylin("dataylin.m");
-		dataylin << "dataylin" << "=";
-		dataylin << data_ylin;
-		dataylin << ";" << std::endl;
+		//~ std::ofstream dataylin("dataylin.m");
+		//~ dataylin << "dataylin" << "=";
+		//~ dataylin << data_ylin;
+		//~ dataylin << ";" << std::endl;
 
 		// InvFFT
 
@@ -487,10 +487,10 @@ Mat linearbscan(Mat data_y, Mat data_yb, Mat data_ylin, Mat barthannwin, int inc
 		Mat bscantemp = magI.colRange(0, numdisplaypoints);
 		bscantemp.convertTo(bscantemp, CV_64F);
 		//debug
-		std::ofstream bscant("bscant.m");
-		bscant << "bscant" << "=";
-		bscant << bscantemp;
-		bscant << ";" << std::endl;
+		//~ std::ofstream bscant("bscant.m");
+		//~ bscant << "bscant" << "=";
+		//~ bscant << bscantemp;
+		//~ bscant << ";" << std::endl;
 		return bscantemp;
 }
 
@@ -840,7 +840,7 @@ int main(int argc, char *argv[])
 
 				// this is the final display routine
 					transpose(bscantransposed, bscan);
-					bscan = bscan / averagestoggle;
+					//bscan = bscan / averagestoggle;
 					bscan += Scalar::all(0.00001);   	// to prevent log of 0  
 														// 20.0 * log(0.1) / 2.303 = -20 dB, which is sufficient 
 
@@ -857,7 +857,7 @@ int main(int argc, char *argv[])
 					tempmat.copyTo(bscandisp);
 					// apply bscanthresholding
 					// MatExpr max(const Mat& a, double s)
-					bscandisp = max(bscandisp, bscanthreshold);
+					//bscandisp = max(bscandisp, bscanthreshold);
 					if (clampupper)
 					{
 						// if this option is selected, set the left upper pixel to 50 dB
@@ -881,7 +881,8 @@ int main(int argc, char *argv[])
 
 						//indexi++;
 						sprintf(filename, "bscanoffline%03d", indexi);
-						 
+						 //sprintf(dirname, ".");
+						 strcpy(dirname, argv[1]);
 						savematasbin(pathname, dirname, filename, bscandb);
 						savematasimage(pathname, dirname, filename, bscandisp);
 						sprintf(filenamec, "bscanofflinec%03d", indexi);
@@ -900,7 +901,7 @@ int main(int argc, char *argv[])
 
 					}// end if skeypressed
 
-					bscantransposed = Mat::zeros(Size(numdisplaypoints, oph), CV_64F);
+					//bscantransposed = Mat::zeros(Size(numdisplaypoints, oph), CV_64F);
 
 					
 
