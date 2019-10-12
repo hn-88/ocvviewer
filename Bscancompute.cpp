@@ -13,8 +13,10 @@
 * Compute offline Bscans.
 * has option to save as Matlab readable file.
 *
-* Example Usage: ./Bscancompute.bin /path/to/Bscans 10
-* where 10 is number of spectrogram images, in the filename style
+* Example Usage: ./Bscancompute.bin /path/to/Bscans 10 2
+* The 2 is binvalue, optional, if the saved png files are different in size
+* from the saved ocv files. 
+* The 10 is number of spectrogram images, in the filename style
 * Trig001-000.png, Trig001-001.png, etc for the triggered captured spectrograms
 * KTrig001-000.png, KTrig001-001.png, etc for the J0 null captured spectrograms
 * and spectrum.ocv for the saved spectrum.
@@ -549,7 +551,8 @@ int main(int argc, char *argv[])
 	char lambdamaxstr[40];
 	char lambdaminstr[40];
 	
-	
+	if (argc > 3)	// then we have input the offline binning parameter as well
+	 binvalue = atoi(argv[3]);
 	
 	struct tm *timenow;
 
@@ -783,10 +786,14 @@ int main(int argc, char *argv[])
 			// do all Bscan processing here
 			
 			rgbchannels[0].convertTo(data_y, CV_64F);	// initialize data_y
+			if (argc > 3)	// then we have input the offline binning parameter as well
+				 resize(data_y, data_y, Size(), 1.0 / binvalue, 1.0 / binvalue, INTER_AREA);	// binning (averaging)
+				 
 			if(data_yb.channels() > 1)
 			{
 				split(data_yb, rgbchannels);
 				rgbchannels[0].convertTo(data_yb, CV_64F);
+				
 			}
 			//debug
 			//cout << "converted to data_y" << endl;
@@ -815,6 +822,8 @@ int main(int argc, char *argv[])
 			} 
 			
 			rgbchannels[0].convertTo(data_y, CV_64F);	// initialize data_y
+			if (argc > 3)	// then we have input the offline binning parameter as well
+				 resize(data_y, data_y, Size(), 1.0 / binvalue, 1.0 / binvalue, INTER_AREA);	// binning (averaging)
 			/////////////////////////////////////////////////////////
 			// do all Bscan processing here
 			jscansave[indextemp] = linearbscan(data_y, data_yb, data_ylin, barthannwin, increasefftpointsmultiplier, numdisplaypoints, diffk,  slopes, fractionalk, nearestkindex );
